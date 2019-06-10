@@ -47,7 +47,8 @@ Ctrl + the arrow keys can be used to cycle through tabs.
 ## Frequently used commands
 
 Make sure that the time on robot's computer and time in the docker container/your 
-computer are the same. 
+computer are the same. The server is currently set in the `/etc/hosts` file to the 
+IP of the robot. 
 ```sh
 sudo ntpdate -u tl1-1-am1 
 ```
@@ -57,3 +58,26 @@ environment variable to the docker startup file.
 ```sh
 --env="TZ=America/New_York" \
 ```
+
+SSH into the robot computer
+```sh
+ssh rcta@tl1-1-am1
+```
+
+Run the `export ROS_IP` command on each of the docker tabs(set it to your 
+computer's IP address). This is to inform the robot of the IP of the host computer.
+
+Set the ROS_MASTER_URI if running the planner on the robot. 
+```sh
+--env="ROS_MASTER_URI=http://tl1-1-am1:11311" \
+```
+
+If there is a need to manually move the robot's joints around, using the scripts 
+from `$RS_LIMB_ROOT/sbin`.
+
+Running visualization in RViz - 
+Run this `export LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH `
+to make sure RViz is running with the right libraries. The rviz file with the correct configs set 
+is `rcta-roman1.rviz`. Run it with the namespace `__ns:=roman1`
+
+Running batch tests on the robot -  
