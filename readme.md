@@ -43,3 +43,17 @@ Executing a configuration script will start a screen session with tabs preloaded
 with the required commands. Launch the system by executing the command within
 each tab. Note that the default screen accelerator key C-a is modified to C-x.
 Ctrl + the arrow keys can be used to cycle through tabs.
+
+## Frequently used commands
+
+Make sure that the time on robot's computer and time in the docker container/your 
+computer are the same. 
+```sh
+sudo ntpdate -u tl1-1-am1 
+```
+
+To align the time zones in docker to the same as that on the robot, add this 
+environment variable to the docker startup file.
+```sh
+--env="TZ=America/New_York" \
+```
