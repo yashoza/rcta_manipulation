@@ -179,6 +179,7 @@ bool AdjustGripper()
     return true;
 }
 
+#if 0
 bool CheckGripperGrip()
 {
 
@@ -201,6 +202,7 @@ bool CheckGripperGrip()
     
     return 0;
 }
+
 
 // Execute a sequence of trajectory/gripper commands.
 bool ExecuteTrajectory(
@@ -255,6 +257,8 @@ bool ExecuteTrajectory(
     return true;
 }
 
+#endif
+
 bool CheckGripperGrip()
 {
     // subscribe to the joint_space topic
@@ -303,8 +307,8 @@ bool ExecuteTrajectory(
         return 1;
     }
 
-    auto nh1 = ros::NodeHandle();
-    ros::Publisher gripper_command_pub = nh1.advertise<std_msgs::Float64MultiArray>("/roman1/rcta_right_robotiq_controller/command", 1000);
+    // auto nh1 = ros::NodeHandle();
+    // ros::Publisher gripper_command_pub = nh1.advertise<std_msgs::Float64MultiArray>("/roman1/rcta_right_robotiq_controller/command", 1000);
                 
     for (auto& command : commands) {
         if (command->type == Command::Type::Gripper) {
