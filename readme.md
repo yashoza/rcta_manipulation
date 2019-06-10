@@ -81,3 +81,27 @@ to make sure RViz is running with the right libraries. The rviz file with the co
 is `rcta-roman1.rviz`. Run it with the namespace `__ns:=roman1`
 
 Running batch tests on the robot -  
+
+While running the Realsense, launch the `rs_rgbd.launch` file with the it with the argument 
+`camera:=roman1/center_realsense`
+
+Moving the fingers
+```sh
+rostopic pub -1 /roman1/rcta_right_robotiq_controller/command std_msgs/Float64MultiArray 'layout:
+  dim:
+  - label: joint
+    size: 4
+    stride: 1
+  data_offset: 0
+data: [6.0, 6.0,6.0,137.0]'
+```
+
+Moving the dynamixel that supports the camera - 
+```sh
+rcta@tl1-1-am1:~/rcta/install$ more share/rcta_dynamixel_publisher/config/roman1
+```
+
+To run PERCH
+```sh
+rostopic pub /requested_object std_msgs/String "data: 'test'" 
+```
