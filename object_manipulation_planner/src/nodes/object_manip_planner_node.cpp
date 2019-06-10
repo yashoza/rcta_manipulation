@@ -127,6 +127,7 @@ bool GetParam(const ros::NodeHandle& nh, const std::string& name, T* value)
 
 bool AdjustGripper()
 {
+
     // init move_group
     // adjust the gripper position if necessary
     // check again maybe ?
@@ -135,6 +136,82 @@ bool AdjustGripper()
     auto group_name = std::string("right_arm_and_torso");
     auto move_group =
             moveit::planning_interface::MoveGroupInterface(group_name);
+
+    move_group.setPlanningTime(10.0);
+
+    move_group.setPlannerId("right_arm_and_torso[right_arm_and_torso_ARA_BFS_ML]");
+    move_group.setGoalPositionTolerance(0.02);
+    move_group.setGoalOrientationTolerance(smpl::to_radians(2.0));
+
+    move_group.setWorkspace(-0.5, -1.5, -0.2, 1.5, 1.5, 1.8);
+
+    auto gripper_client_name = std::string("rcta_right_robotiq_controller/gripper_action");
+
+    auto tool_link_name = "limb_right_tool0";
+
+    ROS_INFO("Wait for GripperCommand action server '%s'", gripper_client_name.c_str());
+    GripperCommandActionClient gripper_client(gripper_client_name);
+    if (!gripper_client.waitForServer()) {
+        ROS_WARN("Failed to wait for action server '%s'", gripper_client_name.c_str());
+        return 1;
+    }
+
+    ROS_INFO("finished watiting for the GripperCommand action server. out now ");
+
+    move_group.setEndEffectorLink(tool_link_name);
+
+    {
+        auto curr_state = *move_group.getCurrentState();
+        auto& tool_transform = curr_state.getGlobalLinkTransform(tool_link_name);
+        // TODO - change this value 
+        auto move_pose =
+                tool_transform *
+                Eigen::Translation3d(0.0, -0.1, 0.0);
+
+        move_group.setPlannerId("right_arm_and_torso[right_arm_and_torso_ARA_BFS_ML]");
+        move_group.setGoalPositionTolerance(0.02);
+        move_group.setGoalOrientationTolerance(smpl::to_radians(2.0));        
+        move_group.setPoseTarget(move_pose, tool_link_name);
+        auto err = move_group.move();
+        std::cout << "moved in adjust gripper " << std::endl;
+    }
+
+    return true;
+}
+
+bool CheckGripperGrip()
+{
+
+    // subscribe to the /roman1/joint_space topic 
+    // read the gripper's current position
+    // return feedback
+
+    auto nh = ros::NodeHandle();
+
+    auto msg = ros::topic::waitForMessage<sensor_msgs::JointState>("/roman1/joint_states", nh, ros::Duration(10.0));
+
+    int size_msg = msg->position.size();
+
+    if (msg)
+    {        
+        ROS_INFO("position of finger (%d th) is %d", 1, msg->position[size_msg - 6]);
+        ROS_INFO("position of finger (%d th) is %d", 2, msg->position[size_msg - 5]);
+        ROS_INFO("position of finger (%d th) is %d", 3, msg->position[size_msg - 4]);
+    }
+    
+    return 0;
+}
+
+// Execute a sequence of trajectory/gripper commands.
+bool ExecuteTrajectory(
+    const ros::NodeHandle& nh,
+    const std::vector<std::unique_ptr<Command>>& commands)
+{
+    using GripperCommandActionClient =
+    actionlib::SimpleActionClient<control_msgs::GripperCommandAction>;
+
+    using FollowJointTrajectoryActionClient =
+    actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>;
 
     move_group.setPlanningTime(10.0);
 
@@ -226,6 +303,9 @@ bool ExecuteTrajectory(
         return 1;
     }
 
+    auto nh1 = ros::NodeHandle();
+    ros::Publisher gripper_command_pub = nh1.advertise<std_msgs::Float64MultiArray>("/roman1/rcta_right_robotiq_controller/command", 1000);
+                
     for (auto& command : commands) {
         if (command->type == Command::Type::Gripper) {
             auto* c = static_cast<GripperCommand*>(command.get());
@@ -300,9 +380,10 @@ bool ExecuteTrajectory(
                 traj.trajectory.points[i].positions = std::move(positions);
 
                 traj.trajectory.points[i].time_from_start =
-                        ros::Duration(c->trajectory.getWayPointDurationFromStart(i));
+                ros::Duration(c->trajectory.getWayPointDurationFromStart(i));
 
-                ROS_DEBUG("%zu positions, t(%d) = %f", traj.trajectory.points[i].positions.size(), i, traj.trajectory.points[i].time_from_start.toSec());
+                ROS_DEBUG("%zu positions, t(%d) = %f", traj.trajectory.points[i].positions.size(), i, 
+                    traj.trajectory.points[i].time_from_start.toSec());
             }
 
             ROS_INFO("Execute trajectory");
@@ -631,6 +712,7 @@ bool ManipulateObject(
     ROS_INFO("Crate manipulation successful");
     return true;
 }
+
 
 void UpdateCurrentState(
     CurrentStateMonitor* monitor,
@@ -1051,7 +1133,6 @@ int main(int argc, char* argv[])
     j_object_world.axis = smpl::Vector3::Zero();
     j_object_world.name = "world_joint";
     j_object_world.type = smpl::urdf::JointType::Floating;
-
     if (!InitRobotModel(&object_model, object_urdf.get())) {
         ROS_ERROR("Failed to initialize object model");
         return 1;
@@ -1330,4 +1411,5 @@ int main(int argc, char* argv[])
     ros::spin();
 
     return 0;
+
 }

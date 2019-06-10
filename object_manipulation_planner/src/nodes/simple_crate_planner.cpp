@@ -279,7 +279,7 @@ bool PlanManipulationTrajectory(
     auto manip_traj = robot_trajectory::RobotTrajectory(
             interm_state.getRobotModel(), group_name);
     manip_traj.addSuffixWayPoint(interm_state, 0.0);
-    auto ids = (int32_t)0;
+    auto ids = (int32_t)0; 
 
     for (auto i = 1; i < samples; ++i) { // skip the first waypoint, assume we have at least two samples
         auto alpha = (double)i / (double)(samples - 1);
@@ -350,13 +350,38 @@ bool WritePlan(
     double object_goal)
 {
     // TODO: configurate filename
+
     auto* f = fopen("manipulation.csv", "w");
     if (f == NULL) {
         ROS_INFO("could not open the file ");
         return false;
     }
 
+    // FILE* f = fopen("manipulation_angle2.csv", "w");
+    // if (f == NULL){
+    //     ROS_INFO("could not open the file ");
+    //     return false;
+    // }
+
+    // fputs("\n", f);
+
     // TODO: configurate...grabbed from door_demonstrator.launch
+    // auto variables = std::vector<const char*>{
+    //     "world_joint/x",
+    //     "world_joint/y",
+    //     "world_joint/theta",
+    //     "base_link_z_joint",
+    //     "torso_joint1",
+    //     "limb_right_joint1",
+    //     "limb_right_joint2",
+    //     "limb_right_joint3",
+    //     "limb_right_joint4",
+    //     "limb_right_joint5",
+    //     "limb_right_joint6",
+    //     "limb_right_joint7",
+    //     "hinge",                // TODO: where does this name come from?
+    // };
+
     auto variables = std::vector<const char*>{
         "world_joint/x",
         "world_joint/y",
@@ -379,7 +404,6 @@ bool WritePlan(
         if (i != 0) fputs(",", f);
         fputs(variables[i], f);
     }
-    fputs("\n", f);
 
     auto object_transform = Eigen::Affine3d();
     tf::poseMsgToEigen(object_pose, object_transform);
@@ -517,7 +541,8 @@ bool ManipulateObject(
 
     // robot visualization 
     UpdateVisualBodyTransforms(&object_state);
-    SV_SHOW_INFO_NAMED("object_state", MakeRobotVisualization(&object_state, smpl::visual::Color{ 1.0f, 0.5f, 0.5f, 1.0f }, "map", "object_state"));
+    SV_SHOW_INFO_NAMED("object_state", 
+        MakeRobotVisualization(&object_state, smpl::visual::Color{ 1.0f, 0.5f, 0.5f, 1.0f }, "map", "object_state"));
 
     // getting the contact link for the crate 
     auto* contact_link = GetLink(object_model, "tool");
@@ -560,13 +585,20 @@ bool ManipulateObject(
     // pre-grasp = straight back by some offset
     auto pregrasp_pose = smpl::Affine3(
             contact_pose *
-            smpl::Translation3(pregrasp_offset, 0.0, 0.0));
+            smpl::Translation3(-0.05, 0.0, 0.0));
 
     print_pose("pregrasp pose", pregrasp_pose);
 
     auto tool_link_name = "limb_right_tool0";
+    auto prev_link_name = "limb_right_link0";
+    // limb_right_joint7
+
+    // auto tool_link_name = std::string();
+    // if (!GetParam(nh, "tool_link_name", tool_link_name)) return 1;
+
 
     move_group->setEndEffectorLink(tool_link_name);
+
 
     ////////////////////////////
     // Move to pre-grasp pose //
@@ -581,15 +613,18 @@ bool ManipulateObject(
         auto err = move_group->move();
     }
 
+
+
     //////////////////////
     // open the gripper //
     //////////////////////
 
-    // TODO: REPLACE ME WITH PARTIAL OPEN STATE
+#if 0 // TODO: REPLACE ME WITH PARTIAL OPEN STATE
     if (!OpenGripper(gripper_client)) {
         ROS_ERROR("Failed to open gripper");
         return false;
     }
+#endif
 
     ///////////////////
     // move to grasp //
@@ -634,6 +669,7 @@ bool ManipulateObject(
                     get_lid_pos_from_pct(goal->object_start),
                     get_lid_pos_from_pct(goal->object_goal),
                     alpha);
+            
             ROS_DEBUG("set lid to %f", s);
 
             SetVariablePosition(&object_state, lid_var, s);
@@ -653,7 +689,7 @@ bool ManipulateObject(
 
         auto res = 0.01; // centimeters
         auto samples = std::max(2, (int)std::round(arc / res));
-
+        
         auto plan = moveit::planning_interface::MoveGroupInterface::Plan();
         if (!PlanManipulationTrajectory(
                 move_group,
@@ -664,6 +700,72 @@ bool ManipulateObject(
             return false;
         }
 
+# if 0
+        auto write_manip_trajectory = true; // TODO: configurate this
+        if (write_manip_trajectory) {
+
+            auto traj = robot_trajectory::RobotTrajectory(
+                    move_group->getRobotModel(), *group_name);
+            traj.setRobotTrajectoryMsg(
+                    *move_group->getCurrentState(),
+                    plan.start_state_,
+                    plan.trajectory_);
+            if (!WritePlan(&traj, goal->object_pose, goal->object_start, goal->object_goal)) {
+                ROS_ERROR("Failed to write manipulation trajectory");
+            }
+        }
+
+        auto err = move_group->execute(plan);
+        if (err != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+            ROS_ERROR("Failed to execute manip trajectory");
+            return false;
+        }
+    }
+
+    ///////////////////////////////////////////
+    // manipulate the object - crate release //
+    ///////////////////////////////////////////
+
+    {
+        auto release_manifold = [&](double alpha) -> Eigen::Affine3d
+        {
+
+            auto s = interp(
+                    0.0,
+                    -0.15*M_PI,
+                    alpha);
+
+            Eigen::Vector3d rot2(0,0,1); 
+            double mag = rot2.norm();
+            Eigen::AngleAxisd rot(s , rot2/mag);
+            // Eigen::AngleAxisd rot(- 0.5 * M_PI, Eigen::Vector3d::UnitZ());
+            auto curr_state = *move_group->getCurrentState();
+            auto& tool_transform = curr_state.getGlobalLinkTransform(tool_link_name);
+            auto rotate_gripper_pose =
+                    tool_transform*rot;
+            
+            std::cout << "tool transform is - " << tool_transform.matrix() << std::endl;
+            
+            return rotate_gripper_pose;
+        };
+
+        auto samples = 20; //std::max(2, (int)std::round(arc / res));
+        
+        auto plan = moveit::planning_interface::MoveGroupInterface::Plan();
+        if (!PlanManipulationTrajectory(
+                move_group,
+                *group_name, tool_link_name,
+                samples, release_manifold,
+                &plan))
+        {
+            return false;
+        }
+
+        std::cout << plan.trajectory_ << std::endl;
+
+        auto write_manip_trajectory = false; // TODO: configurate this
+
+#endif
         if (write_manip_trajectory) {
             auto traj = robot_trajectory::RobotTrajectory(
                     move_group->getRobotModel(), *group_name);
@@ -765,7 +867,7 @@ bool ManipulateObject(
         if (err != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
             return false;
         }
-    }
+    }   
 
     return true;
 }
