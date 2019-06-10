@@ -487,6 +487,8 @@ bool ManipulateObject(
     // Visualize the state of the object //
     ///////////////////////////////////////
 
+    ROS_INFO("starting manipulation planner");
+
     auto* obj_root_joint = GetRootJoint(object_model);
     if (obj_root_joint->type == smpl::urdf::JointType::Floating) {
         auto obj_state = smpl::urdf::RobotState();
@@ -500,6 +502,11 @@ bool ManipulateObject(
             positions[5] = msg->object_pose.orientation.z; // blech
             positions[6] = msg->object_pose.orientation.w; // blech
             SetJointPositions(&obj_state, obj_root_joint, positions);
+
+            // for (int i = 0; i < 7; i++){
+            //     ROS_INFO( "position %f, %f", i, positions[i]);
+            // }
+
             UpdateVisualBodyTransforms(&obj_state);
             SV_SHOW_INFO_NAMED(
                 "object_state",
@@ -575,6 +582,16 @@ bool ManipulateObject(
     auto object_pose = Eigen::Affine3d();
     tf::poseMsgToEigen(msg->object_pose, object_pose);
 
+    ROS_INFO("pose 0 %f",object_pose.translation()[0]);
+    ROS_INFO("pose 1 %f",object_pose.translation()[1]);
+    ROS_INFO("pose 2 %f",object_pose.translation()[2]);
+
+    //Eigen::Quaterniond q = (Eigen::Quaterniond)e.linear();
+    //m.rotation.x = q.x();
+    //m.rotation.y = q.y();
+    //m.rotation.z = q.z();
+    //m.rotation.w = q.w();
+    
     auto object_start_state = msg->object_start;
     auto object_goal_state = msg->object_goal;
 
@@ -804,6 +821,7 @@ bool ReleaseCrate(
     ros::Publisher* gripper_command_pub,
     bool plan_only)
 {
+    ROS_INFO("Going to release crate");
     // we're not going to perform the crate release in plan-only mode. see note
     // above
     if (plan_only) return true;
@@ -824,6 +842,7 @@ bool ReleaseCrate(
     move_group->setGoalOrientationTolerance(smpl::to_radians(2.0));
 
     move_group->setWorkspace(-0.5, -1.5, -0.2, 1.5, 1.5, 1.8);
+    // move_group->setWorkspace(-0.3, -1.3, -0.0, 1.7, 1.7, 2.0);
 
     auto tool_link_name = "limb_right_tool0";
 
@@ -847,7 +866,7 @@ bool ReleaseCrate(
     {
         auto release_manifold = [&](double alpha) -> Eigen::Affine3d
         {
-            auto s = interp(0.0, -0.15 * M_PI, alpha);
+            auto s = interp(0.0, -0.07 * M_PI, alpha);
 
             Eigen::Vector3d rot2(0,0,1);
             double mag = rot2.norm();
@@ -917,7 +936,7 @@ bool ReleaseCrate(
         auto& tool_transform = curr_state.getGlobalLinkTransform(tool_link_name);
         auto withdraw_pose =
                 tool_transform *
-                Eigen::Translation3d(-0.1, 0.0, 0.0);
+                Eigen::Translation3d(-0.2, 0.0, 0.0);
 
         move_group->setPlannerId("right_arm_and_torso[right_arm_and_torso_ARA_BFS_ML]");
         move_group->setGoalPositionTolerance(0.02);
@@ -1259,10 +1278,13 @@ int main(int argc, char* argv[])
 
     auto autostart = false;
 
+    ROS_INFO("Creating action server for object manipulation");
+
     ManipulateObjectActionServer server(
         "manipulate_object",
         [&](const cmu_manipulation_msgs::ManipulateObjectGoal::ConstPtr& msg)
         {
+            ROS_INFO("Calling manip object");
             auto curr_state = GetCurrentState(&state_monitor);
             if (ManipulateObject(
                 robot_model,
@@ -1302,6 +1324,9 @@ int main(int argc, char* argv[])
     ROS_INFO("Start action server");
 
     server.start();
+
+    ROS_INFO("Started action server");
+
     ros::spin();
 
     return 0;

@@ -4,6 +4,8 @@
 #include <cmu_manipulation_msgs/ManipulateObjectAction.h>
 #include <smpl/angles.h>
 
+#include <geometry_msgs/PoseStamped.h>
+
 int main(int argc, char* argv[])
 {
     ros::init(argc, argv, "manipulate_object");
@@ -29,8 +31,23 @@ int main(int argc, char* argv[])
     auto execute = false;
     ph.param("execute", execute, false);
 
+    // ROS_INFO("execute is %d", execute);
+
     auto object_pose = std::vector<double>();
     (void)ph.getParam("object_pose", object_pose);
+
+    ROS_INFO("waiting for message");
+
+    auto msg = ros::topic::waitForMessage<geometry_msgs::PoseStamped>(
+            "/perch_pose", nh, ros::Duration(600.0));
+
+    if (msg) {
+        ROS_INFO("x coordinate of crate is %f", msg->pose.position.x);
+        ROS_INFO("y coordinate of crate is %f", msg->pose.position.y);
+        ROS_INFO("z coordinate of crate is %f", msg->pose.position.z);
+    }
+
+    // return 0;
 
     /////////////////////////////////
     // Build ManipulateObject Goal //
@@ -85,6 +102,7 @@ int main(int argc, char* argv[])
 
     goal.object_id = "crate"; // TODO:
 
+#if 0
     if (object_pose.size() > 0) {
         goal.object_pose.position.x = object_pose[0];
     }
@@ -94,18 +112,35 @@ int main(int argc, char* argv[])
     if (object_pose.size() > 2) {
         goal.object_pose.position.z = object_pose[2];
     }
+#else
+    
+    goal.object_pose.position.x = msg->pose.position.x;
+    goal.object_pose.position.y = msg->pose.position.y;
+    goal.object_pose.position.z = msg->pose.position.z;
+    
+#endif
+
     auto goal_qz = 0.0;
     auto goal_qy = 0.0;
     auto goal_qx = 0.0;
+
+#if 0
     if (object_pose.size() > 3) {
         goal_qz = smpl::to_radians(object_pose[3]);
+        // ROS_INFO("z orientation of crate is %f", goal_qz);
     }
     if (object_pose.size() > 4) {
         goal_qy = smpl::to_radians(object_pose[4]);
+        // ROS_INFO("y orientation of crate is %f", goal_qy);
     }
     if (object_pose.size() > 5) {
         goal_qx = smpl::to_radians(object_pose[5]);
+        // ROS_INFO("x orientation of crate is %f", goal_qx);
     }
+
+    ROS_INFO("x orientation of crate is %f", goal_qx);
+    ROS_INFO("y orientation of crate is %f", goal_qy);
+    ROS_INFO("z orientation of crate is %f", goal_qz);
 
     auto oq = Eigen::Quaterniond(
         Eigen::AngleAxisd(goal_qz, Eigen::Vector3d::UnitZ()) *
@@ -116,6 +151,18 @@ int main(int argc, char* argv[])
     goal.object_pose.orientation.y = oq.y();
     goal.object_pose.orientation.z = oq.z();
 
+#endif
+
+    goal.object_pose.orientation.w = msg->pose.orientation.w;
+    goal.object_pose.orientation.x = msg->pose.orientation.x;
+    goal.object_pose.orientation.y = msg->pose.orientation.y;
+    goal.object_pose.orientation.z = msg->pose.orientation.z;
+
+    ROS_INFO("w orientation of crate is %f", msg->pose.orientation.w);
+    ROS_INFO("x orientation of crate is %f", msg->pose.orientation.x);
+    ROS_INFO("y orientation of crate is %f", msg->pose.orientation.y);
+    ROS_INFO("z orientation of crate is %f", msg->pose.orientation.z);
+
     goal.object_start = object_start_state;
     goal.object_goal = object_goal_state;
 
@@ -123,16 +170,23 @@ int main(int argc, char* argv[])
 
     goal.plan_only = !execute;
 
+    ROS_INFO("goal ready");
+
     ///////////////
     // Send Goal //
     ///////////////
 
     using cmu_manipulation_msgs::ManipulateObjectAction;
     using ManipulateObjectActionClient = actionlib::SimpleActionClient<ManipulateObjectAction>;
-    ManipulateObjectActionClient client("manipulate_object");
+    ManipulateObjectActionClient client("/roman1/manipulate_object");
+    ROS_INFO("waiting for server");
     client.waitForServer();
 
+    ROS_INFO("going to send goal now ");
+
     auto state = client.sendGoalAndWait(goal);
+
+    ROS_INFO("sent goal");
     if (state.state_ == state.SUCCEEDED) {
         ROS_INFO("Success!");
         return 0;

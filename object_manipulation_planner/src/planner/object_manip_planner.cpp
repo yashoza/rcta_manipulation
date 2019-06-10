@@ -375,6 +375,10 @@ bool PlanPath(
                     point[WORLD_JOINT_YAW],
                     point[WORLD_JOINT_PITCH],
                     point[WORLD_JOINT_ROLL]);
+            // ROS_INFO("POSE NEW 1 IS %f", point[WORLD_JOINT_X]);
+            // ROS_INFO("POSE NEW 2 IS %f", point[WORLD_JOINT_Y]);
+            // ROS_INFO("POSE NEW 3 IS %f", point[WORLD_JOINT_Z]);
+
 #else
             point[WORLD_JOINT_X] = round(1000.0 * T_world_robot.translation().x()) / 1000.0;
             point[WORLD_JOINT_Y] = round(1000.0 * T_world_robot.translation().y()) / 1000.0;
